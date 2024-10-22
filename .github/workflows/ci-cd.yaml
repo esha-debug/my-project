@@ -6,10 +6,7 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  NODE_VERSION: '16.x'
-  KEYCLOAK_VERSION: '16.1.1'
-  AUTHENTIK_VERSION: '2022.6.3'
+
 
 jobs:
   build-test-deploy:
@@ -17,7 +14,7 @@ jobs:
 
     services:
       keycloak:
-        image: jboss/keycloak:${{ env.KEYCLOAK_VERSION }}
+        image: jboss/keycloak:${{ secrets.KEYCLOAK_VERSION }}
         env:
           KEYCLOAK_USER: admin
           KEYCLOAK_PASSWORD: admin
@@ -41,10 +38,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: Use Node.js ${{ env.NODE_VERSION }}
+    - name: Use Node.js ${{ secrets.NODE_VERSION }}
       uses: actions/setup-node@v2
       with:
-        node-version: ${{ env.NODE_VERSION }}
+        node-version: ${{ secrets.NODE_VERSION }}
 
     - name: Install dependencies
       run: npm ci
