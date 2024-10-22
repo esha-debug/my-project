@@ -1,0 +1,116 @@
+name: Secure API CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '16.x'
+  KEYCLOAK_VERSION: '16.1.1'
+  AUTHENTIK_VERSION: '2022.6.3'
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+
+    services:
+      keycloak:
+        image: jboss/keycloak:${{ env.KEYCLOAK_VERSION }}
+        env:
+          KEYCLOAK_USER: admin
+          KEYCLOAK_PASSWORD: admin
+        ports:
+          - 8080:8080
+
+   #      healthcheck:
+  #test: ["CMD", "curl", "-f", "http://localhost:8080/auth"]
+  #interval: 30s
+  #timeout: 10s
+  #retries: 3 
+
+      authentik:
+        image: ghcr.io/goauthentik/server:${{ env.AUTHENTIK_VERSION }}
+        env:
+          AUTHENTIK_SECRET_KEY: ${{ secrets.AUTHENTIK_SECRET_KEY }}
+          AUTHENTIK_POSTGRESQL__HOST: localhost
+        ports:
+          - 9000:9000
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Use Node.js ${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run linter
+      run: npm run lint
+
+    - name: Run unit tests
+      run: npm test
+
+    - name: Build application
+      run: npm run build
+
+    - name: Setup Keycloak realm and client
+      run: |
+        # Add script to configure Keycloak
+        echo "Setting up Keycloak..."
+
+    - name: Setup Authentik provider
+      run: |
+        # Add script to configure Authentik
+        echo "Setting up Authentik..."
+
+    - name: Run integration tests
+      run: npm run test:integration
+
+    - name: Install Postman CLI
+      run: |
+        curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+
+    - name: Run Postman security tests
+      run: |
+        postman login --with-api-key ${{ secrets.POSTMAN_API_KEY }}
+        postman collection run your-security-collection-id -e your-environment-id
+
+    - name: Run OWASP ZAP scan
+      uses: zaproxy/action-full-scan@v0.4.0
+      with:
+        target: 'http://localhost:3000'
+
+    - name: Build Docker image
+      run: docker build -t hackler254/elevator:latest .
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Push to DockerHub
+      run: docker push hackler254/elevator:latest .
+
+    - name: Deploy to staging
+      run: |
+        # Add deployment script here
+        echo "Deploying to staging environment..."
+
+    - name: Run post-deployment tests
+      run: |
+        # Add post-deployment test script here
+        echo "Running post-deployment tests..."
+
+    - name: Notify security team
+      if: failure()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: "Security vulnerabilities detected in the API. Immediate attention required."
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
